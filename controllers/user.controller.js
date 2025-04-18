@@ -2,11 +2,41 @@ import User from "../models/user.model.js";
 import Follow from "../models/follow.model.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = 'uploads/';
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath);
+    }
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
 
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // Max file size is 5MB
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png/;
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = filetypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+    cb('Error: Only images are allowed!');
+  }
+}).single('profilePic'); // 'profilePic' will be the field name from the frontend
 export const registerUser = async (req, res) => {
   const { username, displayName, email, password } = req.body;
-
+  const profilePic = req.file ? req.file.filename : null;
   // Ensure all fields are provided
   if (!username || !email || !password) {
     return res.status(400).json({ message: "All fields are required!" });
@@ -34,6 +64,7 @@ export const registerUser = async (req, res) => {
       displayName,
       email,
       hashedPassword: newHashedPassword,
+      img: profilePic,
     });
 
     // Generate JWT token
@@ -51,6 +82,7 @@ export const registerUser = async (req, res) => {
     // Return the user details without the password
     res.status(201).json({
       ...detailsWithoutPassword,
+      profilePic: profilePic ? `/uploads/${profilePic}` : null,
  // Send the list of categories
     });
   } catch (error) {
@@ -122,12 +154,13 @@ export const getUser = async (req, res) => {
 
   const followerCount = await Follow.countDocuments({ following: user._id });
   const followingCount = await Follow.countDocuments({ follower: user._id });
-
+  const profilePic = user.img ? `/uploads/${user.img}` : null;
   const token = req.cookies.token;
 
   if (!token) {
     res.status(200).json({
       ...detailsWithoutPassword,
+      profilePic,
       followerCount,
       followingCount,
       isFollowing: false,
@@ -142,6 +175,7 @@ export const getUser = async (req, res) => {
 
         res.status(200).json({
           ...detailsWithoutPassword,
+          profilePic,
           followerCount,
           followingCount,
           isFollowing: isExists ? true : false,

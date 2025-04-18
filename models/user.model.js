@@ -16,7 +16,8 @@ const userSchema = new Schema(
       required: true,
     },
     img: {
-      type: String,
+      type: String, // This will store the filename of the uploaded profile picture
+      default: null,
     },
     hashedPassword: {
       type: String,
